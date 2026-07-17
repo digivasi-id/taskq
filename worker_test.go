@@ -3,6 +3,7 @@ package taskq
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -20,7 +21,7 @@ func TestDelayDefersExecution(t *testing.T) {
 	started := make(chan struct{}, 1)
 	release := make(chan struct{})
 
-	if _, err := q.Dispatch(func() error {
+	if _, err := q.Dispatch(func(context.Context) error {
 		started <- struct{}{}
 		<-release
 		return nil
@@ -57,7 +58,7 @@ func TestWorkersRunInParallel(t *testing.T) {
 	ready := make(chan struct{})
 	var once sync.Once
 
-	job := func() error {
+	job := func(context.Context) error {
 		if started.Add(1) == 2 {
 			once.Do(func() { close(ready) })
 		}
@@ -191,6 +192,7 @@ func TestSchedulerReceivesWhileTimerActive(t *testing.T) {
 	}
 
 	q.schedulerWG.Add(1)
+	q.jobsWG.Add(2)
 	done := make(chan struct{})
 	go func() {
 		q.scheduler()
@@ -239,13 +241,28 @@ func TestSchedulerCancelsWhileEnqueuingReady(t *testing.T) {
 	waitFor(t, done, time.Second, "scheduler cancellation while enqueuing ready")
 }
 
-func TestPanicJobCompletesQueue(t *testing.T) {
-	q := testQueue(1)
+func TestPanicJobFailsWithStackTrace(t *testing.T) {
+	failed := make(chan error, 1)
+	q := testQueue(1, WithOnJobFailed(func(id string, err error) {
+		failed <- err
+	}))
 
-	if _, err := q.Dispatch(func() error {
+	if _, err := q.Dispatch(func(context.Context) error {
 		panic("boom")
 	}, WithMaxAttempts(1)); err != nil {
 		t.Fatalf("dispatch: %v", err)
+	}
+
+	select {
+	case err := <-failed:
+		if !strings.Contains(err.Error(), "panic: boom") {
+			t.Fatalf("failure error = %v, want panic message", err)
+		}
+		if !strings.Contains(err.Error(), "goroutine") {
+			t.Fatalf("failure error = %v, want stack trace", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for failure callback")
 	}
 
 	if err := q.Shutdown(context.Background()); err != nil {
@@ -265,7 +282,7 @@ func TestRetryWithNegativeBackoff(t *testing.T) {
 
 	done := make(chan struct{})
 	var attempts atomic.Int32
-	_, err := q.Dispatch(func() error {
+	_, err := q.Dispatch(func(context.Context) error {
 		if attempts.Add(1) == 1 {
 			return errors.New("retry")
 		}
@@ -309,13 +326,13 @@ func TestDelayedJobsRunInOrder(t *testing.T) {
 	first := make(chan struct{})
 	second := make(chan struct{})
 
-	if _, err := q.Dispatch(func() error {
+	if _, err := q.Dispatch(func(context.Context) error {
 		close(first)
 		return nil
 	}, WithDelay(20*time.Millisecond)); err != nil {
 		t.Fatalf("dispatch first: %v", err)
 	}
-	if _, err := q.Dispatch(func() error {
+	if _, err := q.Dispatch(func(context.Context) error {
 		close(second)
 		return nil
 	}, WithDelay(40*time.Millisecond)); err != nil {

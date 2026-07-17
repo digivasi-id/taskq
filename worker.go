@@ -3,6 +3,7 @@ package taskq
 import (
 	"container/heap"
 	"fmt"
+	"runtime/debug"
 	"time"
 )
 
@@ -46,6 +47,12 @@ func (q *Queue) worker() {
 		select {
 		case <-q.ctx.Done():
 			return
+		default:
+		}
+
+		select {
+		case <-q.ctx.Done():
+			return
 		case j := <-q.ready:
 			if j == nil {
 				continue
@@ -56,8 +63,6 @@ func (q *Queue) worker() {
 }
 
 func (q *Queue) scheduler() {
-	defer q.schedulerWG.Done()
-
 	var (
 		pending scheduledHeap
 		timer   *time.Timer
@@ -72,6 +77,15 @@ func (q *Queue) scheduler() {
 		timer = nil
 		timerC = nil
 	}
+
+	defer func() {
+		stopTimer()
+		for len(pending) > 0 {
+			sj := heap.Pop(&pending).(*scheduledJob)
+			q.dropJob(sj.job)
+		}
+		q.schedulerWG.Done()
+	}()
 
 	for {
 		if len(pending) == 0 {
@@ -92,17 +106,12 @@ func (q *Queue) scheduler() {
 		if wait < 0 {
 			wait = 0
 		}
-		if timer == nil {
-			timer = time.NewTimer(wait)
-		} else {
-			stopTimer()
-			timer = time.NewTimer(wait)
-		}
+		stopTimer()
+		timer = time.NewTimer(wait)
 		timerC = timer.C
 
 		select {
 		case <-q.ctx.Done():
-			stopTimer()
 			return
 		case j := <-q.schedule:
 			if j != nil {
@@ -117,8 +126,7 @@ func (q *Queue) scheduler() {
 				}
 				heap.Pop(&pending)
 				if err := q.enqueueReady(next.job); err != nil {
-					q.logf("job %s dropped while scheduling: %v", next.job.ID, err)
-					q.jobsWG.Done()
+					q.dropJob(next.job)
 				}
 			}
 		}
@@ -129,7 +137,7 @@ func (q *Queue) runJob(j *job) {
 	var runErr error
 	defer func() {
 		if r := recover(); r != nil {
-			runErr = fmt.Errorf("panic: %v", r)
+			runErr = fmt.Errorf("panic: %v\n%s", r, debug.Stack())
 		}
 		if runErr == nil {
 			q.logf("job %s completed", j.ID)
@@ -139,7 +147,7 @@ func (q *Queue) runJob(j *job) {
 		q.finishFailedJob(j, runErr)
 	}()
 
-	runErr = j.fn()
+	runErr = j.fn(q.ctx)
 }
 
 func (q *Queue) finishFailedJob(j *job, runErr error) {
@@ -147,6 +155,7 @@ func (q *Queue) finishFailedJob(j *job, runErr error) {
 
 	if j.attempts >= j.MaxAttempts {
 		q.logf("job %s failed after %d attempt(s): %v", j.ID, j.attempts, runErr)
+		q.notifyFailed(j.ID, runErr)
 		q.jobsWG.Done()
 		return
 	}
@@ -160,6 +169,7 @@ func (q *Queue) finishFailedJob(j *job, runErr error) {
 	q.logf("job %s retrying in %s (%d/%d): %v", j.ID, delay, j.attempts+1, j.MaxAttempts, runErr)
 	if err := q.enqueueScheduled(j); err != nil {
 		q.logf("job %s retry scheduling failed: %v", j.ID, err)
+		q.notifyFailed(j.ID, runErr)
 		q.jobsWG.Done()
 	}
 }
