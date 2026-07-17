@@ -46,7 +46,7 @@ jobs:
           fi
 
           mkdir badge
-          printf '{"schemaVersion": 1, "label": "coverage", "message": "%s%%", "color": "%s"}\n' \
+          printf '{"schemaVersion": 1, "label": "Coverage", "message": "%s%%", "color": "%s"}\n' \
             "$TOTAL" "$color" > badge/coverage.json
 
           cd badge
