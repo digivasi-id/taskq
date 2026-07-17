@@ -1,6 +1,7 @@
 [![Build Status](https://github.com/digivasi-id/taskq/actions/workflows/ci.yml/badge.svg)](https://github.com/digivasi-id/taskq/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdigivasi-id%2Ftaskq%2Fbadges%2Fcoverage.json)](https://github.com/digivasi-id/taskq/actions/workflows/coverage.yml)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Go Reference](https://img.shields.io/badge/go.dev-reference-blue?logo=go&logoColor=white)](https://pkg.go.dev/github.com/digivasi-id/taskq)
 
 # taskq - Lightweight In-Memory Task Queue
 
