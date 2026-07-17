@@ -1,6 +1,7 @@
 package taskq
 
 import (
+	"context"
 	"errors"
 	"sync/atomic"
 	"testing"
@@ -39,7 +40,7 @@ func TestJobRetriesUntilSuccess(t *testing.T) {
 	var attempts atomic.Int32
 	done := make(chan struct{})
 
-	if _, err := q.Dispatch(func() error {
+	if _, err := q.Dispatch(func(context.Context) error {
 		if attempts.Add(1) < 3 {
 			return errors.New("retry me")
 		}

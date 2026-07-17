@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   coverage:
     runs-on: ubuntu-latest
@@ -14,14 +17,42 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.0'
+          go-version: 'stable'
 
       - name: Run coverage
         run: go test -coverprofile=coverage.out ./...
 
       - name: Check coverage
+        id: coverage
         shell: bash
         run: |
           total=$(go tool cover -func=coverage.out | awk '/total:/ {gsub("%", "", $3); print $3}')
+          echo "total=${total}" >> "$GITHUB_OUTPUT"
           echo "Coverage: ${total}%" >> "$GITHUB_STEP_SUMMARY"
           awk "BEGIN {exit !($total >= 100.0)}"
+
+      - name: Publish coverage badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          TOTAL: ${{ steps.coverage.outputs.total }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if awk "BEGIN {exit !($TOTAL >= 95)}"; then color=brightgreen
+          elif awk "BEGIN {exit !($TOTAL >= 85)}"; then color=green
+          elif awk "BEGIN {exit !($TOTAL >= 75)}"; then color=yellowgreen
+          elif awk "BEGIN {exit !($TOTAL >= 60)}"; then color=yellow
+          else color=red
+          fi
+
+          mkdir badge
+          printf '{"schemaVersion": 1, "label": "coverage", "message": "%s%%", "color": "%s"}\n' \
+            "$TOTAL" "$color" > badge/coverage.json
+
+          cd badge
+          git init -q -b badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add coverage.json
+          git commit -q -m "Update coverage badge: ${TOTAL}%"
+          git push -q --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
