@@ -12,18 +12,18 @@ func TestJobOptions(t *testing.T) {
 	var j job
 
 	WithDelay(2 * time.Second)(&j)
-	if j.Delay != 2*time.Second {
-		t.Fatalf("delay = %s, want %s", j.Delay, 2*time.Second)
+	if j.delay != 2*time.Second {
+		t.Fatalf("delay = %s, want %s", j.delay, 2*time.Second)
 	}
 
 	WithMaxAttempts(5)(&j)
-	if j.MaxAttempts != 5 {
-		t.Fatalf("max attempts = %d, want 5", j.MaxAttempts)
+	if j.maxAttempts != 5 {
+		t.Fatalf("max attempts = %d, want 5", j.maxAttempts)
 	}
 
 	WithID("custom-id")(&j)
-	if j.ID != "custom-id" {
-		t.Fatalf("id = %q, want custom-id", j.ID)
+	if j.id != "custom-id" {
+		t.Fatalf("id = %q, want custom-id", j.id)
 	}
 }
 

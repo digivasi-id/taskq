@@ -204,9 +204,9 @@ func (q *Queue) dispatch(fn JobFunc, block bool, opts []JobOption) (string, erro
 	}
 
 	j := &job{
-		ID:          q.nextID(),
+		id:          q.nextID(),
 		fn:          fn,
-		MaxAttempts: q.maxAttempts,
+		maxAttempts: q.maxAttempts,
 		runAt:       time.Now(),
 	}
 	for _, opt := range opts {
@@ -214,14 +214,14 @@ func (q *Queue) dispatch(fn JobFunc, block bool, opts []JobOption) (string, erro
 			opt(j)
 		}
 	}
-	if j.ID == "" {
-		j.ID = q.nextID()
+	if j.id == "" {
+		j.id = q.nextID()
 	}
-	if j.MaxAttempts < 1 {
-		j.MaxAttempts = 1
+	if j.maxAttempts < 1 {
+		j.maxAttempts = 1
 	}
-	if j.Delay > 0 {
-		j.runAt = time.Now().Add(j.Delay)
+	if j.delay > 0 {
+		j.runAt = time.Now().Add(j.delay)
 	}
 	j.seq = q.nextSequence()
 	q.jobsWG.Add(1)
@@ -244,7 +244,7 @@ func (q *Queue) dispatch(fn JobFunc, block bool, opts []JobOption) (string, erro
 		q.jobsWG.Done()
 		return "", err
 	}
-	return j.ID, nil
+	return j.id, nil
 }
 
 // Shutdown gracefully drains the queue: it stops accepting new jobs and
@@ -380,8 +380,8 @@ func tryEnqueue(ch chan *job, j *job) error {
 }
 
 func (q *Queue) dropJob(j *job) {
-	q.logf("job %s dropped: %v", j.ID, ErrQueueClosed)
-	q.notifyFailed(j.ID, ErrQueueClosed)
+	q.logf("job %s dropped: %v", j.id, ErrQueueClosed)
+	q.notifyFailed(j.id, ErrQueueClosed)
 	q.jobsWG.Done()
 }
 

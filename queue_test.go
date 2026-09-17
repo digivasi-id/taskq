@@ -242,8 +242,8 @@ func TestTerminateDropsBufferedJobs(t *testing.T) {
 	}
 	q.ctx, q.cancel = context.WithCancel(context.Background())
 
-	q.ready <- &job{ID: "buffered-ready"}
-	q.schedule <- &job{ID: "buffered-schedule"}
+	q.ready <- &job{id: "buffered-ready"}
+	q.schedule <- &job{id: "buffered-schedule"}
 	q.jobsWG.Add(2)
 	close(q.stopCh)
 

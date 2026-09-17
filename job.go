@@ -14,10 +14,10 @@ import (
 type JobFunc func(ctx context.Context) error
 
 type job struct {
-	ID          string
+	id          string
 	fn          JobFunc
-	Delay       time.Duration
-	MaxAttempts int
+	delay       time.Duration
+	maxAttempts int
 	attempts    int
 	runAt       time.Time
 	seq         uint64
@@ -33,7 +33,7 @@ func WithDelay(delay time.Duration) JobOption {
 		if delay < 0 {
 			delay = 0
 		}
-		j.Delay = delay
+		j.delay = delay
 	}
 }
 
@@ -42,7 +42,7 @@ func WithDelay(delay time.Duration) JobOption {
 // overrides the queue-wide default set by WithDefaultMaxAttempts.
 func WithMaxAttempts(max int) JobOption {
 	return func(j *job) {
-		j.MaxAttempts = max
+		j.maxAttempts = max
 	}
 }
 
@@ -50,6 +50,6 @@ func WithMaxAttempts(max int) JobOption {
 // is empty (or the option is omitted) the queue generates an ID.
 func WithID(id string) JobOption {
 	return func(j *job) {
-		j.ID = id
+		j.id = id
 	}
 }
