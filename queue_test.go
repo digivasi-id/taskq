@@ -1,10 +1,13 @@
 package taskq
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"log"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 )
@@ -443,5 +446,16 @@ func TestDispatchReturnsErrQueueClosedWhenCanceled(t *testing.T) {
 	}
 	if _, err := q2.Dispatch(func(context.Context) error { return nil }, WithDelay(time.Second)); !errors.Is(err, ErrQueueClosed) {
 		t.Fatalf("dispatch delayed error = %v, want ErrQueueClosed", err)
+	}
+}
+
+func TestSlogLoggerAdaptsPrintf(t *testing.T) {
+	var buf bytes.Buffer
+	l := SlogLogger(slog.New(slog.NewTextHandler(&buf, nil)))
+
+	l.Printf("job %s completed", "job-1")
+
+	if got := buf.String(); !strings.Contains(got, "level=INFO") || !strings.Contains(got, "job job-1 completed") {
+		t.Fatalf("log output = %q, want Info-level message", got)
 	}
 }

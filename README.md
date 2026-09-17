@@ -79,8 +79,9 @@ taskq.WithID("job-123")
 ```go
 taskq.WithDefaultMaxAttempts(3)
 taskq.WithBackoff(func(attempt int) time.Duration { return time.Second })
-taskq.WithLogger(logger)   // the queue is silent by default
-taskq.WithQueueSize(64)    // buffer capacity, default workers*4
+taskq.WithLogger(logger)              // the queue is silent by default; accepts *log.Logger
+taskq.WithLogger(taskq.SlogLogger(l)) // or adapt an *slog.Logger
+taskq.WithQueueSize(64)               // capacity of each internal buffer (ready + delayed), default workers*4
 taskq.WithOnJobFailed(func(id string, err error) {
 	// called when a job exhausts its attempts or is dropped on Stop
 })

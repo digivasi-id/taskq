@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"math/rand/v2"
 	"sync"
 	"sync/atomic"
@@ -31,6 +32,20 @@ var (
 // use, since the queue logs from multiple goroutines.
 type Logger interface {
 	Printf(string, ...any)
+}
+
+// SlogLogger adapts an *slog.Logger to Logger, since slog.Logger has no
+// Printf method of its own. Every queue log line is emitted at Info level.
+func SlogLogger(l *slog.Logger) Logger {
+	return slogLogger{l}
+}
+
+type slogLogger struct {
+	l *slog.Logger
+}
+
+func (s slogLogger) Printf(format string, args ...any) {
+	s.l.Info(fmt.Sprintf(format, args...))
 }
 
 // BackoffFunc returns how long to wait before the next retry, given the
@@ -152,9 +167,12 @@ func WithBackoff(fn BackoffFunc) Option {
 	}
 }
 
-// WithQueueSize sets the capacity of the internal job buffers. The default
-// is workers*4. When the buffer is full, Dispatch blocks and TryDispatch
-// returns ErrQueueFull. Values below 1 fall back to the default.
+// WithQueueSize sets the capacity of each of the queue's two internal
+// buffers — one for ready-to-run jobs, one for delayed jobs and pending
+// retries — so up to 2*n jobs may be in flight at once. The default is
+// workers*4 per buffer. When a buffer is full, Dispatch blocks and
+// TryDispatch returns ErrQueueFull. Values below 1 fall back to the
+// default.
 func WithQueueSize(n int) Option {
 	return func(q *Queue) {
 		q.queueSize = n
