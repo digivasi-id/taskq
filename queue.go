@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"math/rand/v2"
 	"sync"
 	"sync/atomic"
@@ -31,6 +32,20 @@ var (
 // use, since the queue logs from multiple goroutines.
 type Logger interface {
 	Printf(string, ...any)
+}
+
+// SlogLogger adapts an *slog.Logger to Logger, since slog.Logger has no
+// Printf method of its own. Every queue log line is emitted at Info level.
+func SlogLogger(l *slog.Logger) Logger {
+	return slogLogger{l}
+}
+
+type slogLogger struct {
+	l *slog.Logger
+}
+
+func (s slogLogger) Printf(format string, args ...any) {
+	s.l.Info(fmt.Sprintf(format, args...))
 }
 
 // BackoffFunc returns how long to wait before the next retry, given the
@@ -152,9 +167,12 @@ func WithBackoff(fn BackoffFunc) Option {
 	}
 }
 
-// WithQueueSize sets the capacity of the internal job buffers. The default
-// is workers*4. When the buffer is full, Dispatch blocks and TryDispatch
-// returns ErrQueueFull. Values below 1 fall back to the default.
+// WithQueueSize sets the capacity of each of the queue's two internal
+// buffers — one for ready-to-run jobs, one for delayed jobs and pending
+// retries — so up to 2*n jobs may be in flight at once. The default is
+// workers*4 per buffer. When a buffer is full, Dispatch blocks and
+// TryDispatch returns ErrQueueFull. Values below 1 fall back to the
+// default.
 func WithQueueSize(n int) Option {
 	return func(q *Queue) {
 		q.queueSize = n
@@ -204,9 +222,9 @@ func (q *Queue) dispatch(fn JobFunc, block bool, opts []JobOption) (string, erro
 	}
 
 	j := &job{
-		ID:          q.nextID(),
+		id:          q.nextID(),
 		fn:          fn,
-		MaxAttempts: q.maxAttempts,
+		maxAttempts: q.maxAttempts,
 		runAt:       time.Now(),
 	}
 	for _, opt := range opts {
@@ -214,14 +232,14 @@ func (q *Queue) dispatch(fn JobFunc, block bool, opts []JobOption) (string, erro
 			opt(j)
 		}
 	}
-	if j.ID == "" {
-		j.ID = q.nextID()
+	if j.id == "" {
+		j.id = q.nextID()
 	}
-	if j.MaxAttempts < 1 {
-		j.MaxAttempts = 1
+	if j.maxAttempts < 1 {
+		j.maxAttempts = 1
 	}
-	if j.Delay > 0 {
-		j.runAt = time.Now().Add(j.Delay)
+	if j.delay > 0 {
+		j.runAt = time.Now().Add(j.delay)
 	}
 	j.seq = q.nextSequence()
 	q.jobsWG.Add(1)
@@ -244,7 +262,7 @@ func (q *Queue) dispatch(fn JobFunc, block bool, opts []JobOption) (string, erro
 		q.jobsWG.Done()
 		return "", err
 	}
-	return j.ID, nil
+	return j.id, nil
 }
 
 // Shutdown gracefully drains the queue: it stops accepting new jobs and
@@ -380,8 +398,8 @@ func tryEnqueue(ch chan *job, j *job) error {
 }
 
 func (q *Queue) dropJob(j *job) {
-	q.logf("job %s dropped: %v", j.ID, ErrQueueClosed)
-	q.notifyFailed(j.ID, ErrQueueClosed)
+	q.logf("job %s dropped: %v", j.id, ErrQueueClosed)
+	q.notifyFailed(j.id, ErrQueueClosed)
 	q.jobsWG.Done()
 }
 

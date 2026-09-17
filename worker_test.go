@@ -308,8 +308,8 @@ func TestFinishFailedJobCancelsRetryScheduling(t *testing.T) {
 
 	q.jobsWG.Add(1)
 	q.finishFailedJob(&job{
-		ID:          "retry-job",
-		MaxAttempts: 2,
+		id:          "retry-job",
+		maxAttempts: 2,
 		runAt:       time.Now(),
 		seq:         1,
 	}, errors.New("retry"))

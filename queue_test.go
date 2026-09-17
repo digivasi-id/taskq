@@ -1,10 +1,13 @@
 package taskq
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"log"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 )
@@ -242,8 +245,8 @@ func TestTerminateDropsBufferedJobs(t *testing.T) {
 	}
 	q.ctx, q.cancel = context.WithCancel(context.Background())
 
-	q.ready <- &job{ID: "buffered-ready"}
-	q.schedule <- &job{ID: "buffered-schedule"}
+	q.ready <- &job{id: "buffered-ready"}
+	q.schedule <- &job{id: "buffered-schedule"}
 	q.jobsWG.Add(2)
 	close(q.stopCh)
 
@@ -443,5 +446,16 @@ func TestDispatchReturnsErrQueueClosedWhenCanceled(t *testing.T) {
 	}
 	if _, err := q2.Dispatch(func(context.Context) error { return nil }, WithDelay(time.Second)); !errors.Is(err, ErrQueueClosed) {
 		t.Fatalf("dispatch delayed error = %v, want ErrQueueClosed", err)
+	}
+}
+
+func TestSlogLoggerAdaptsPrintf(t *testing.T) {
+	var buf bytes.Buffer
+	l := SlogLogger(slog.New(slog.NewTextHandler(&buf, nil)))
+
+	l.Printf("job %s completed", "job-1")
+
+	if got := buf.String(); !strings.Contains(got, "level=INFO") || !strings.Contains(got, "job job-1 completed") {
+		t.Fatalf("log output = %q, want Info-level message", got)
 	}
 }

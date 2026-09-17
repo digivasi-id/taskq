@@ -140,7 +140,7 @@ func (q *Queue) runJob(j *job) {
 			runErr = fmt.Errorf("panic: %v\n%s", r, debug.Stack())
 		}
 		if runErr == nil {
-			q.logf("job %s completed", j.ID)
+			q.logf("job %s completed", j.id)
 			q.jobsWG.Done()
 			return
 		}
@@ -153,9 +153,9 @@ func (q *Queue) runJob(j *job) {
 func (q *Queue) finishFailedJob(j *job, runErr error) {
 	j.attempts++
 
-	if j.attempts >= j.MaxAttempts {
-		q.logf("job %s failed after %d attempt(s): %v", j.ID, j.attempts, runErr)
-		q.notifyFailed(j.ID, runErr)
+	if j.attempts >= j.maxAttempts {
+		q.logf("job %s failed after %d attempt(s): %v", j.id, j.attempts, runErr)
+		q.notifyFailed(j.id, runErr)
 		q.jobsWG.Done()
 		return
 	}
@@ -166,10 +166,10 @@ func (q *Queue) finishFailedJob(j *job, runErr error) {
 	}
 	j.runAt = time.Now().Add(delay)
 
-	q.logf("job %s retrying in %s (%d/%d): %v", j.ID, delay, j.attempts+1, j.MaxAttempts, runErr)
+	q.logf("job %s retrying in %s (%d/%d): %v", j.id, delay, j.attempts+1, j.maxAttempts, runErr)
 	if err := q.enqueueScheduled(j); err != nil {
-		q.logf("job %s retry scheduling failed: %v", j.ID, err)
-		q.notifyFailed(j.ID, runErr)
+		q.logf("job %s retry scheduling failed: %v", j.id, err)
+		q.notifyFailed(j.id, runErr)
 		q.jobsWG.Done()
 	}
 }
